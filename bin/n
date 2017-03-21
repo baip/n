@@ -394,11 +394,12 @@ get_os() {
     Linux*) echo linux ;;
     Darwin*) echo darwin ;;
     SunOS*) echo sunos ;;
-    CYGWIN*|MSYS*) echo win;;
+    CYGWIN*) echo win-cygwin;;
+    MSYS*) echo win-msys ;;
   esac
 }
 
-if [ $(get_os) == 'win' ]; then
+if [[ $(get_os) =~ 'win-' ]]; then
   path2node="node"
   set -o igncr
 else
@@ -414,8 +415,9 @@ tarball_url() {
   local arch=x86
   local os=$(get_os)
 
-  if [ $os == 'win' ]; then
+  if [[ $os =~ 'win-' ]]; then
     local ext=zip
+    os=win
   else
     local ext=tar.gz
   fi
@@ -474,9 +476,17 @@ activate() {
   if test "$version" != "$active"; then
     local dir=$BASE_VERSIONS_DIR/$version
     local os=$(get_os)
-    if [ $os == 'win' ]; then
+    if [[ $os =~ 'win-' ]]; then
       chmod +x $dir/node.exe $dir/npm $dir/npm.cmd
-      find "$dir" -mindepth 1 -maxdepth 1 -exec cp -fR "{}" "$N_PREFIX/bin" \;
+      link_dir=$N_PREFIX/nodejs
+      rm -f $link_dir
+      if [ $os == 'win-cygwin' ]; then
+        ln -sf $dir $link_dir
+      else
+        link_dir="$(echo "$link_dir" | sed -E -e 's#/([a-zA-Z])/#\1:\\#' -e 's#/#\\#g')"
+        dir="$(echo "$dir" | sed -E -e 's#/([a-zA-Z])/#\1:\\#' -e 's#/#\\#g')"
+        cmd <<< "mklink /D \"$link_dir\" \"$dir\""
+      fi
     else
       for subdir in bin lib include share; do
         if test -L "$N_PREFIX/$subdir"; then
